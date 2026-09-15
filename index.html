@@ -51,10 +51,37 @@
     dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
     .dialog-body { padding: 16px; display: grid; gap: 10px; }
     .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .ledger-grid { display: grid; grid-template-columns: 360px 1fr; gap: 16px; align-items: start; }
+    .sub-panel { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #fbfdfb; }
+    .sub-panel h3, .ledger-h { margin: 0 0 10px; font-size: 15px; }
+    .stations-head { margin-bottom: 6px; }
+    .station-row { display: grid; grid-template-columns: 1fr 1fr 34px; gap: 6px; margin-bottom: 8px; }
+    .station-row .st-venue { grid-column: 1 / 3; }
+    .station-row .st-del { grid-row: 1; grid-column: 3; }
+    .station-row .st-end { grid-column: 2 / 4; }
+    .loan-card { border: 1px solid var(--line); border-left: 4px solid var(--violet); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; background: #fff; }
+    .loan-card.cancelled { border-left-color: var(--red); }
+    .loan-card.done { border-left-color: #9db8ad; }
+    .loan-card h3 { margin: 0 0 6px; font-size: 15px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; color: #fff; background: var(--teal); }
+    .badge.red { background: var(--red); }
+    .badge.grey { background: #5d6764; }
+    .station-flow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
+    .station-chip { display: inline-block; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 12px; background: #fff; }
+    .station-chip.active { border-color: var(--teal); background: #e7f2f0; }
+    .station-chip.done { background: #f0f5f2; color: var(--muted); }
+    .station-chip.released { border-color: var(--red); background: #f9eeee; color: var(--red); }
+    .checks { display: flex; gap: 14px; flex-wrap: wrap; margin: 8px 0; }
+    .checks .chk, .confirm-row .chk { display: flex; flex-direction: row; align-items: center; gap: 5px; color: var(--ink); font-size: 13px; }
+    .checks .chk input, .confirm-row .chk input { width: auto; }
+    .confirm-row { display: flex; gap: 16px; flex-wrap: wrap; }
+    .ho-list { margin-top: 6px; }
+    .ho-list .ho { padding: 2px 0; }
     @media (max-width: 980px) {
       header { display: block; padding: 18px; }
       main { padding: 16px; }
-      .top, .lists, .toolbar { grid-template-columns: 1fr; }
+      .top, .lists, .toolbar, .ledger-grid { grid-template-columns: 1fr; }
       .grid2 { grid-template-columns: 1fr; }
     }
   </style>
@@ -63,7 +90,7 @@
   <header>
     <div>
       <h1>小型漆线雕工坊管理</h1>
-      <div class="sub">贴线、阴干、上金粉、待交付的作品流转与缺陷追踪</div>
+      <div class="sub">贴线、阴干、上金粉、待交付的作品流转与缺陷追踪 · 借展与巡展责任台账</div>
     </div>
     <button id="exportBtn" class="secondary">导出 JSON</button>
   </header>
@@ -118,6 +145,37 @@
         <div id="board" class="board"></div>
       </section>
     </section>
+
+    <section class="panel" id="ledgerPanel">
+      <h2>借展与巡展责任台账</h2>
+      <div class="meta" id="loanSummary" style="margin-bottom:12px"></div>
+      <div class="ledger-grid">
+        <form id="loanForm" class="sub-panel">
+          <h3>新建借展单</h3>
+          <label>借展作品<select id="loanWork" required></select></label>
+          <div class="grid2">
+            <label>借展方<input id="loanBorrower" required placeholder="省博物馆"></label>
+            <label>保险额（万元）<input id="loanInsurance" type="number" min="0.1" step="0.1" required placeholder="80"></label>
+          </div>
+          <div class="grid2">
+            <label>出库日期<input id="loanOut" type="date" required></label>
+            <label>预计返还<input id="loanReturn" type="date" required></label>
+          </div>
+          <div>
+            <div class="meta stations-head">巡展站点（按顺序接续；单站即普通借展）</div>
+            <div id="stationRows"></div>
+            <button type="button" id="addStation" class="secondary">添加站点</button>
+          </div>
+          <button type="submit">建立借展单</button>
+        </form>
+        <div>
+          <h3 class="ledger-h">借展单</h3>
+          <div id="loanList"></div>
+          <h3 class="ledger-h">理赔处理</h3>
+          <div id="claimList"></div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <dialog id="detailDialog">
@@ -130,6 +188,51 @@
       <div class="actions">
         <button id="saveDefect" class="warn">保存缺陷</button>
         <button id="closeDialog" class="secondary">关闭</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="handoverDialog">
+    <div class="dialog-body">
+      <h2 id="handoverTitle">点交登记</h2>
+      <div id="handoverContext" class="meta"></div>
+      <label>经手人<input id="hoHandler" placeholder="姓名"></label>
+      <label>点交时间<input id="hoTime" type="datetime-local"></label>
+      <label>包装方式<input id="hoPacking" placeholder="木箱 + 珍珠棉 + 防潮袋"></label>
+      <label>瑕疵说明<textarea id="hoDefects" placeholder="既有瑕疵，无则填无"></textarea></label>
+      <label>新增损伤（如有，将进入理赔）<input id="hoDamage" placeholder="右下角新磕碰"></label>
+      <div class="confirm-row">
+        <label class="chk"><input id="hoConfirmA" type="checkbox"> 甲方（交出方）确认</label>
+        <label class="chk"><input id="hoConfirmB" type="checkbox"> 乙方（接收方）确认</label>
+      </div>
+      <div class="actions">
+        <button id="hoSave">确认点交</button>
+        <button id="hoCancel" class="secondary">取消</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="cancelDialog">
+    <div class="dialog-body">
+      <h2>取消 / 中止借展单</h2>
+      <div class="meta">将按站点倒序释放未完成的站点安排；已发生的点交与理赔记录保留，不可覆盖。</div>
+      <label>取消 / 中止原因<textarea id="cancelReason" placeholder="借展方展厅漏水，巡展中止"></textarea></label>
+      <div class="actions">
+        <button id="cancelConfirm" class="danger">确认取消</button>
+        <button id="cancelAbort" class="secondary">返回</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="delayDialog">
+    <div class="dialog-body">
+      <h2>登记运输延期</h2>
+      <div id="delayContext" class="meta"></div>
+      <label>新的离站日期<input id="delayEnd" type="date"></label>
+      <label>延期原因<textarea id="delayReason" placeholder="物流车辆故障，转运延误"></textarea></label>
+      <div class="actions">
+        <button id="delayConfirm" class="warn">保存延期</button>
+        <button id="delayAbort" class="secondary">取消</button>
       </div>
     </div>
   </dialog>
@@ -233,6 +336,7 @@
     function render() {
       renderSummaries();
       renderBoard();
+      renderLoans();
     }
 
     form.addEventListener("submit", event => {
@@ -271,13 +375,365 @@
     });
     [statusFilter, themeFilter, sortMode].forEach(el => el.addEventListener("input", render));
     document.querySelector("#exportBtn").addEventListener("click", () => {
-      const blob = new Blob([JSON.stringify(works, null, 2)], { type: "application/json" });
+      const blob = new Blob([JSON.stringify({ works, loans }, null, 2)], { type: "application/json" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
-      link.download = "lacquer-thread-works.json";
+      link.download = "lacquer-thread-ledger.json";
       link.click();
       URL.revokeObjectURL(link.href);
     });
+
+    // ===== 借展与巡展责任台账 =====
+    const loanKey = "zfl42Loans";
+    let loans = JSON.parse(localStorage.getItem(loanKey) || "null") || [];
+    let handoverCtx = null;
+    let cancelCtx = null;
+    let delayCtx = null;
+
+    const loanForm = document.querySelector("#loanForm");
+    const loanWork = document.querySelector("#loanWork");
+    const stationRows = document.querySelector("#stationRows");
+    const loanListEl = document.querySelector("#loanList");
+    const claimListEl = document.querySelector("#claimList");
+    const loanSummaryEl = document.querySelector("#loanSummary");
+    const handoverDialog = document.querySelector("#handoverDialog");
+    const cancelDialog = document.querySelector("#cancelDialog");
+    const delayDialog = document.querySelector("#delayDialog");
+
+    function nowLocal() {
+      const d = new Date();
+      return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+    function saveLoans() {
+      localStorage.setItem(loanKey, JSON.stringify(loans));
+    }
+    function loanOf(id) { return loans.find(l => l.id === id); }
+    function workOf(id) { return works.find(w => w.id === id) || { theme: "（作品已删除）", base: "" }; }
+    function activeLoanOf(workId) { return loans.find(l => l.workId === workId && (l.status === "待出库" || l.status === "在展")); }
+    function openClaimsOf(workId) {
+      return loans.filter(l => l.workId === workId).flatMap(l => l.claims).filter(c => c.status === "待处理");
+    }
+    function currentStationIndex(loan) { return loan.stations.findIndex(s => s.status === "负责中"); }
+    function nextStationIndex(loan) { return loan.stations.findIndex((s, i) => s.status === "待接续" && i > 0 && loan.stations[i - 1].status === "已返还"); }
+    function hasHandover(loan, type, stationIndex) { return loan.handovers.some(h => h.type === type && h.stationIndex === stationIndex); }
+
+    function addStationRow(venue = "", start = "", end = "") {
+      const row = document.createElement("div");
+      row.className = "station-row";
+      row.innerHTML = `
+        <input class="st-venue" placeholder="场地/展馆" value="${venue}" required>
+        <input class="st-start" type="date" value="${start}" required>
+        <input class="st-end" type="date" value="${end}" required>
+        <button type="button" class="danger st-del" title="删除站点">×</button>`;
+      row.querySelector(".st-del").addEventListener("click", () => {
+        if (stationRows.children.length > 1) row.remove();
+      });
+      stationRows.appendChild(row);
+    }
+
+    function togglePreCheck(loanId, key) {
+      const loan = loanOf(loanId);
+      if (!loan || loan.status !== "待出库") return;
+      loan.preCheck[key] = !loan.preCheck[key];
+      const label = { condition: "状态点检", auth: "授权确认", packing: "包装交接" }[key];
+      loan.logs.push(`${new Date().toLocaleString()} ${loan.preCheck[key] ? "完成" : "撤销"}${label}`);
+      saveLoans();
+      renderLoans();
+    }
+
+    function openHandover(loanId, type) {
+      const loan = loanOf(loanId);
+      if (!loan) return;
+      let stationIndex = -1;
+      if (type === "出库点交") {
+        if (loan.status !== "待出库") return alert("当前状态不可做出库点交");
+        const p = loan.preCheck;
+        if (!(p.condition && p.auth && p.packing)) return alert("出库前须完成状态点检、授权确认和包装交接");
+        stationIndex = 0;
+      } else if (type === "返还点交") {
+        stationIndex = currentStationIndex(loan);
+        if (stationIndex < 0) return alert("当前没有负责中的站点");
+      } else if (type === "站间交接") {
+        stationIndex = nextStationIndex(loan);
+        if (stationIndex < 0) return alert("上一站返还点检通过后才能发往下一站");
+      } else if (type === "归还入库") {
+        stationIndex = loan.stations.length - 1;
+        if (loan.stations[stationIndex].status !== "已返还") return alert("末站返还点检通过后才能归还入库");
+      }
+      if (hasHandover(loan, type, stationIndex)) return alert("该环节已完成点交，不能重复交接");
+      handoverCtx = { loanId, type, stationIndex };
+      const w = workOf(loan.workId);
+      document.querySelector("#handoverTitle").textContent = `${type} · ${w.theme}`;
+      document.querySelector("#handoverContext").innerHTML =
+        `借展方：${loan.borrower} · 站点：${loan.stations[stationIndex].venue}（第 ${stationIndex + 1} 站）<br>保险额：${loan.insurance} 万元`;
+      document.querySelector("#hoTime").value = nowLocal();
+      document.querySelector("#hoHandler").value = "";
+      document.querySelector("#hoPacking").value = "";
+      document.querySelector("#hoDefects").value = "";
+      document.querySelector("#hoDamage").value = "";
+      document.querySelector("#hoConfirmA").checked = false;
+      document.querySelector("#hoConfirmB").checked = false;
+      handoverDialog.showModal();
+    }
+
+    function saveHandover() {
+      if (!handoverCtx) return;
+      const { loanId, type, stationIndex } = handoverCtx;
+      const loan = loanOf(loanId);
+      if (!loan) return;
+      if (hasHandover(loan, type, stationIndex)) {
+        alert("该环节已完成点交，不能重复交接");
+        if (handoverDialog.open) handoverDialog.close();
+        return;
+      }
+      const handler = document.querySelector("#hoHandler").value.trim();
+      const time = document.querySelector("#hoTime").value;
+      const packing = document.querySelector("#hoPacking").value.trim();
+      const defects = document.querySelector("#hoDefects").value.trim();
+      const newDamage = document.querySelector("#hoDamage").value.trim();
+      const confirmA = document.querySelector("#hoConfirmA").checked;
+      const confirmB = document.querySelector("#hoConfirmB").checked;
+      if (!handler) return alert("请填写经手人");
+      if (!time) return alert("请填写点交时间");
+      if (!confirmA || !confirmB) return alert("点交须经双方确认");
+      const stamp = new Date().toLocaleString();
+      loan.handovers.push({
+        id: crypto.randomUUID(), type, stationIndex, handler, time,
+        packing, defects, newDamage, confirmA, confirmB, createdAt: stamp
+      });
+      const venue = loan.stations[stationIndex].venue;
+      if (type === "出库点交") { loan.status = "在展"; loan.stations[0].status = "负责中"; }
+      if (type === "返还点交") loan.stations[stationIndex].status = "已返还";
+      if (type === "站间交接") loan.stations[stationIndex].status = "负责中";
+      if (type === "归还入库") loan.status = "已归还";
+      if (newDamage) {
+        loan.claims.push({ id: crypto.randomUUID(), handoverId: loan.handovers[loan.handovers.length - 1].id, description: newDamage, status: "待处理", createdAt: stamp, settledAt: "", settleNote: "" });
+        loan.logs.push(`${stamp} 新增损伤进入理赔：${newDamage}`);
+      }
+      loan.logs.push(`${stamp} ${type}完成（${venue}，经手人 ${handler}）`);
+      saveLoans();
+      renderLoans();
+      handoverDialog.close();
+    }
+
+    function openCancel(loanId) {
+      const loan = loanOf(loanId);
+      if (!loan || (loan.status !== "待出库" && loan.status !== "在展")) return;
+      cancelCtx = loanId;
+      document.querySelector("#cancelReason").value = "";
+      cancelDialog.showModal();
+    }
+
+    function confirmCancel() {
+      const loan = loanOf(cancelCtx);
+      if (!loan) return;
+      const reason = document.querySelector("#cancelReason").value.trim();
+      if (!reason) return alert("请填写取消/中止原因");
+      const stamp = new Date().toLocaleString();
+      for (let i = loan.stations.length - 1; i >= 0; i--) {
+        const s = loan.stations[i];
+        if (s.status === "待接续" || s.status === "负责中") {
+          s.status = "已释放";
+          s.releasedReason = reason;
+          s.releasedAt = stamp;
+          loan.logs.push(`${stamp} 倒序释放第 ${i + 1} 站（${s.venue}）：${reason}`);
+        }
+      }
+      loan.status = "已取消";
+      loan.cancelReason = reason;
+      loan.cancelledAt = stamp;
+      loan.logs.push(`${stamp} 借展单取消/中止：${reason}（已发生的点交与理赔记录保留）`);
+      saveLoans();
+      renderLoans();
+      cancelDialog.close();
+    }
+
+    function openDelay(loanId) {
+      const loan = loanOf(loanId);
+      if (!loan || loan.status !== "在展") return;
+      const i = currentStationIndex(loan);
+      if (i < 0) return alert("当前没有负责中的站点");
+      delayCtx = loanId;
+      document.querySelector("#delayContext").innerHTML = `当前站点：${loan.stations[i].venue}（第 ${i + 1} 站）· 现离站日期 ${loan.stations[i].end}`;
+      document.querySelector("#delayEnd").value = loan.stations[i].end;
+      document.querySelector("#delayReason").value = "";
+      delayDialog.showModal();
+    }
+
+    function confirmDelay() {
+      const loan = loanOf(delayCtx);
+      if (!loan) return;
+      const i = currentStationIndex(loan);
+      if (i < 0) { delayDialog.close(); return; }
+      const newEnd = document.querySelector("#delayEnd").value;
+      const reason = document.querySelector("#delayReason").value.trim();
+      if (!newEnd) return alert("请选择新的离站日期");
+      if (!reason) return alert("请填写延期原因");
+      const s = loan.stations[i];
+      const stamp = new Date().toLocaleString();
+      s.delays.push({ oldEnd: s.end, newEnd, reason, at: stamp });
+      s.end = newEnd;
+      loan.logs.push(`${stamp} 第 ${i + 1} 站（${s.venue}）运输延期至 ${newEnd}：${reason}`);
+      saveLoans();
+      renderLoans();
+      delayDialog.close();
+    }
+
+    function settleClaim(loanId, claimId) {
+      const loan = loanOf(loanId);
+      if (!loan) return;
+      const claim = loan.claims.find(c => c.id === claimId);
+      if (!claim || claim.status !== "待处理") return;
+      const note = prompt("理赔了结说明（赔付/修复结果）", "已赔付并安排修复");
+      if (note === null) return;
+      claim.status = "已了结";
+      claim.settledAt = new Date().toLocaleString();
+      claim.settleNote = note;
+      loan.logs.push(`${new Date().toLocaleString()} 理赔了结：${claim.description}`);
+      saveLoans();
+      renderLoans();
+    }
+
+    function renderWorkOptions() {
+      const cur = loanWork.value;
+      loanWork.innerHTML = `<option value="">请选择借展作品</option>` + works.map(w => {
+        const busy = activeLoanOf(w.id);
+        const claims = openClaimsOf(w.id);
+        const tag = busy ? "（借展中）" : claims.length ? "（理赔未了结，不得借出）" : "";
+        return `<option value="${w.id}" ${busy || claims.length ? "disabled" : ""}>${w.theme} · ${w.base}${tag}</option>`;
+      }).join("");
+      if (cur && [...loanWork.options].some(o => o.value === cur && !o.disabled)) loanWork.value = cur;
+    }
+
+    function loanActions(loan) {
+      const btns = [];
+      if (loan.status === "待出库") {
+        const ready = loan.preCheck.condition && loan.preCheck.auth && loan.preCheck.packing;
+        btns.push(`<button ${ready ? "" : "disabled"} onclick="openHandover('${loan.id}','出库点交')">出库点交</button>`);
+        btns.push(`<button class="danger" onclick="openCancel('${loan.id}')">取消</button>`);
+      } else if (loan.status === "在展") {
+        if (currentStationIndex(loan) >= 0) {
+          btns.push(`<button onclick="openHandover('${loan.id}','返还点交')">返还点检</button>`);
+          btns.push(`<button class="warn" onclick="openDelay('${loan.id}')">登记延期</button>`);
+        }
+        if (nextStationIndex(loan) >= 0) btns.push(`<button class="violet" onclick="openHandover('${loan.id}','站间交接')">发往下一站</button>`);
+        if (loan.stations[loan.stations.length - 1].status === "已返还") btns.push(`<button onclick="openHandover('${loan.id}','归还入库')">归还入库</button>`);
+        btns.push(`<button class="danger" onclick="openCancel('${loan.id}')">中止</button>`);
+      }
+      return btns.length ? `<div class="actions">${btns.join("")}</div>` : "";
+    }
+
+    function renderLoanCard(loan) {
+      const w = workOf(loan.workId);
+      const badge = { "待出库": "grey", "在展": "", "已归还": "grey", "已取消": "red" }[loan.status];
+      const stationsHtml = loan.stations.map((s, i) => {
+        const cls = s.status === "负责中" ? "active" : s.status === "已返还" ? "done" : s.status === "已释放" ? "released" : "";
+        const overdue = s.status === "负责中" && s.end < today ? ` <span class="badge red">已延期</span>` : "";
+        const extra = [
+          s.status === "已释放" ? `释放原因：${s.releasedReason}` : "",
+          s.delays.length ? `延期：${s.delays.map(d => `${d.oldEnd}→${d.newEnd}（${d.reason}）`).join("；")}` : ""
+        ].filter(Boolean).join("<br>");
+        return `<span class="station-chip ${cls}">${i + 1}. ${s.venue} ${s.start}~${s.end}【${s.status}】${overdue}${extra ? `<div class="meta">${extra}</div>` : ""}</span>`;
+      }).join(`<span class="meta">→</span>`);
+      const preHtml = loan.status === "待出库"
+        ? `<div class="checks">${[["condition", "状态点检"], ["auth", "授权确认"], ["packing", "包装交接"]].map(([k, label]) =>
+            `<label class="chk"><input type="checkbox" ${loan.preCheck[k] ? "checked" : ""} onclick="togglePreCheck('${loan.id}','${k}')">${label}</label>`).join("")}</div>`
+        : `<div class="meta">出库前检查：状态点检 ✓ · 授权确认 ✓ · 包装交接 ✓</div>`;
+      const hoHtml = loan.handovers.length
+        ? loan.handovers.map(h => `<div class="meta ho">【${h.type}】${h.time} · 经手人 ${h.handler} · 包装 ${h.packing || "—"} · 瑕疵 ${h.defects || "无"} · 双方确认 ✓${h.newDamage ? ` · <span class="badge red">新增损伤：${h.newDamage}</span>` : ""}</div>`).join("")
+        : `<div class="meta">暂无点交记录</div>`;
+      const claimHtml = loan.claims.length
+        ? loan.claims.map(c => `<div class="meta">理赔【${c.status}】${c.description}${c.status === "已了结" ? ` · 了结于 ${c.settledAt}：${c.settleNote}` : ""}</div>`).join("")
+        : "";
+      const cancelHtml = loan.status === "已取消" ? `<div class="meta">取消/中止原因：${loan.cancelReason}（${loan.cancelledAt}）</div>` : "";
+      return `<article class="loan-card ${loan.status === "已取消" ? "cancelled" : loan.status === "已归还" ? "done" : ""}" data-loan-id="${loan.id}">
+        <h3>${w.theme} · ${w.base} <span class="badge ${badge}">${loan.status}</span></h3>
+        <div class="meta">借展方：${loan.borrower} · 保险额：${loan.insurance} 万元 · 出库：${loan.outDate} · 预计返还：${loan.returnDate}</div>
+        <div class="station-flow">${stationsHtml}</div>
+        ${preHtml}
+        <div class="ho-list">${hoHtml}</div>
+        ${claimHtml}${cancelHtml}
+        ${loanActions(loan)}
+      </article>`;
+    }
+
+    function renderLoans() {
+      renderWorkOptions();
+      const active = loans.filter(l => l.status === "在展").length;
+      const pending = loans.filter(l => l.status === "待出库").length;
+      const openClaims = loans.flatMap(l => l.claims).filter(c => c.status === "待处理").length;
+      loanSummaryEl.textContent = `在展 ${active} · 待出库 ${pending} · 未结理赔 ${openClaims} · 借展单总数 ${loans.length}`;
+      loanListEl.innerHTML = loans.length ? loans.map(renderLoanCard).join("") : `<div class="empty">暂无借展单，请在左侧建立</div>`;
+      const rows = [];
+      loans.forEach(l => l.claims.forEach(c => rows.push({ loan: l, claim: c })));
+      claimListEl.innerHTML = rows.length ? rows.map(({ loan, claim }) => {
+        const w = workOf(loan.workId);
+        return `<div class="item ${claim.status === "待处理" ? "overdue" : ""}">
+          <b>${w.theme} · ${claim.description}</b>
+          <div class="meta">借展方 ${loan.borrower} · 状态：${claim.status} · 登记 ${claim.createdAt}${claim.settledAt ? ` · 了结 ${claim.settledAt}：${claim.settleNote}` : ""}</div>
+          ${claim.status === "待处理" ? `<div class="actions"><button class="warn" onclick="settleClaim('${loan.id}','${claim.id}')">了结理赔</button></div>` : ""}
+        </div>`;
+      }).join("") : `<div class="empty">暂无理赔</div>`;
+    }
+
+    document.querySelector("#addStation").addEventListener("click", () => addStationRow());
+
+    loanForm.addEventListener("submit", event => {
+      event.preventDefault();
+      const workId = loanWork.value;
+      if (!workId) return alert("请选择借展作品");
+      if (activeLoanOf(workId)) return alert("该作品已有进行中的借展安排，同一作品同一时刻只能由一个站点负责");
+      if (openClaimsOf(workId).length) return alert("该作品存在未了结的理赔，不得再借出");
+      const borrower = document.querySelector("#loanBorrower").value.trim();
+      const insurance = Number(document.querySelector("#loanInsurance").value);
+      const outDate = document.querySelector("#loanOut").value;
+      const returnDate = document.querySelector("#loanReturn").value;
+      if (!borrower) return alert("请填写借展方");
+      if (!(insurance > 0)) return alert("请填写保险额");
+      if (!outDate || !returnDate) return alert("请填写往返日期");
+      if (returnDate < outDate) return alert("返还日期不能早于出库日期");
+      const stations = [...stationRows.querySelectorAll(".station-row")].map(row => ({
+        venue: row.querySelector(".st-venue").value.trim(),
+        start: row.querySelector(".st-start").value,
+        end: row.querySelector(".st-end").value
+      }));
+      if (!stations.length || stations.some(s => !s.venue || !s.start || !s.end)) return alert("请完整填写站点信息");
+      for (const s of stations) if (s.end < s.start) return alert("站点离站日期不能早于到站日期");
+      for (let i = 1; i < stations.length; i++) if (stations[i].start < stations[i - 1].end) return alert("巡展站点须按时间顺序接续");
+      const stamp = new Date().toLocaleString();
+      loans.unshift({
+        id: crypto.randomUUID(), workId, borrower, insurance, outDate, returnDate,
+        status: "待出库",
+        preCheck: { condition: false, auth: false, packing: false },
+        stations: stations.map(s => ({ ...s, status: "待接续", releasedReason: "", releasedAt: "", delays: [] })),
+        handovers: [], claims: [], cancelReason: "", cancelledAt: "",
+        logs: [`${stamp} 创建借展单（${stations.length} 站）`]
+      });
+      loanForm.reset();
+      stationRows.innerHTML = "";
+      document.querySelector("#loanOut").value = today;
+      document.querySelector("#loanReturn").value = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+      addStationRow("", today, new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10));
+      saveLoans();
+      renderLoans();
+    });
+
+    document.querySelector("#hoSave").addEventListener("click", saveHandover);
+    document.querySelector("#hoCancel").addEventListener("click", () => handoverDialog.close());
+    document.querySelector("#cancelConfirm").addEventListener("click", confirmCancel);
+    document.querySelector("#cancelAbort").addEventListener("click", () => cancelDialog.close());
+    document.querySelector("#delayConfirm").addEventListener("click", confirmDelay);
+    document.querySelector("#delayAbort").addEventListener("click", () => delayDialog.close());
+
+    document.querySelector("#loanOut").value = today;
+    document.querySelector("#loanReturn").value = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    addStationRow("", today, new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10));
+
+    window.togglePreCheck = togglePreCheck;
+    window.openHandover = openHandover;
+    window.openCancel = openCancel;
+    window.openDelay = openDelay;
+    window.settleClaim = settleClaim;
 
     window.updateStatus = updateStatus;
     window.recordDefect = recordDefect;
